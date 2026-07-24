@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script>
+
+			function convert({
+				uuid,
+				svg,
+				scale
+			}) {
+
+				const domReady = new Promise((resolve) => {
+					if (document.readyState === 'complete') resolve();
+					document.addEventListener('DOMContentLoaded', resolve);
+				});
+
+				const scaleElement = (element) => {
+
+					const transformAttribute = (value) => {
+
+						let result = '';
+						let unprocessed = '';
+
+						for (let idx = 0 ; idx < value.length + 1 ; idx++) {
+
+							const character = value[idx] || ' ';
+
+							if (['-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', 'e', '%'].includes(value[idx])) {
+								unprocessed += value[idx];
+							} else {
+
+								if (unprocessed.slice(0, -1) !== '%') {
+
+									let number = parseFloat(unprocessed);
+
+									if (!isNaN(number)) {
+										unprocessed = `${number * scale}`;
+									}
+
+								}
+
+								result += unprocessed + character;
+								unprocessed = '';
+
+							}
+
+						}
+
+						return result.slice(0, -1);
+
+					};
+
+					for (const attribute of element.attributes) {
+
+						if (['x', 'y', 'width', 'height', 'viewBox', 'd', 'dx', 'dy', 'cx', 'cy', 'r', 'rx', 'ry'].includes(attribute.name)) {
+							attribute.value = transformAttribute(
+								attribute.value);
+						}
+
+						if (attribute.name === 'transform') {
+
+							let parsed = [];
+							let unparsed = attribute.value;
+
+							let match;
+							
+							while ((match = unparsed.match(/(?<fnc>rotate|translate|skewX|skewY|scale)\((?<values>[-[0-9\.\s]+)\)?/m))) {
+
+								const {
+									fnc 
+								} = match.groups;
+
+								let {
+									values
+								} = match.groups;
+
+								switch (fnc) {
+									case 'rotate': {
+										values = values
+											.split(/\s/);
+										values = [
+											values[0], 
+											...values
+												.slice(1)
+												.map((value) => transformAttribute(value))]
+											.join(' ');
+										break;
+									}
+									case 'translate': {
+										values = values
+											.split(/\s/)
+											.map((value) => transformAttribute(value))
+											.join(' ');
+										break;
+									}
+								}
+
+								parsed
+									.push(`${fnc}(${values})`);
+
+								unparsed = unparsed
+									.slice(match[0].length)
+									.trim();
+
+							}
+
+							attribute.value = parsed.join(' ');
+
+						}
+
+					}
+
+					for (const child of element.children || []) {
+						scaleElement(child, scale);
+					}
+
+					return element;
+
+				};
+
+				const send = (what) => {
+					window.webkit?.messageHandlers.converter.postMessage(
+						JSON.stringify(what));
+				};
+
+				const failed = (error) => {
+					send({
+						uuid,
+						result: 'failure',
+						message: error.message
+					});
+				};
+
+				(async () => {
+
+					await domReady;
+
+					const canvas = document.createElement('canvas');
+					const context = canvas.getContext('2d');
+
+					try {
+
+						svg = scaleElement((new DOMParser())
+							.parseFromString(svg, 'image/svg+xml')
+							.documentElement).outerHTML;
+
+						const image = new Image();
+
+						const url = URL.createObjectURL(
+							new Blob([svg], { type: 'image/svg+xml' }));
+
+						await new Promise((resolve, reject) => {
+
+							image.onload = resolve;
+							image.onerror = reject;
+
+							image.src = url
+							
+						});
+
+						canvas.width = image.naturalWidth;
+						canvas.height = image.naturalHeight;
+
+						context.imageSmoothingEnabled = true;
+						context.imageSmoothingQuality = 'high';
+
+						context.drawImage(
+							image,
+							0,
+							0,
+							image.naturalWidth,
+							image.naturalHeight);
+
+						URL.revokeObjectURL(
+							url);
+
+						const png = await new Promise((resolve) => {
+							canvas.toBlob(resolve, 'image/png');
+						});
+
+						send({
+							command: 'png',
+							uuid,
+							result: 'success',
+							image: await new Promise((resolve, reject) => {
+
+								const reader = new FileReader();
+
+								reader.onload = () => resolve(reader.result);
+								reader.onerror = reject;
+
+								reader.readAsDataURL(png);
+
+							})
+						});
+
+					} catch (error) {
+						failed(error);
+					} finally {
+						document.body.removeChild(
+							canvas);
+					}
+
+				})().catch(failed);
+
+			};
+			
+		</script>
+	</head>
+	<body>
+	</body>
+</html>

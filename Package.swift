@@ -4,21 +4,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "SVGConverter",
-    products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(
-            name: "SVGConverter",
-            targets: ["SVGConverter"]
-        ),
-    ],
-    targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        .target(
-            name: "SVGConverter"
-        ),
+	name: "SVGConverter",
+	platforms: [.iOS(.v18)],
+	products: [
+		// Products define the executables and libraries a package produces, making them visible to other packages.
+		.library(
+			name: "SVGConverter",
+			targets: ["SVGConverter"]
+		)
+	],
+	targets: [
+		// Targets are the basic building blocks of a package, defining a module or a test suite.
+		// Targets can depend on other targets in this package and products from dependencies.
+		.target(
+			name: "SVGConverter",
+			resources: [
+				.process("Converter.html")
+			]
+		)
 
-    ],
-    swiftLanguageModes: [.v6]
+	],
+	swiftLanguageModes: [.v6]
 )
+
