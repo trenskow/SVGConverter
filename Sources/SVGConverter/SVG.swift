@@ -9,7 +9,7 @@ import SwiftUI
 import WebKit
 
 @MainActor
-public struct SVG<Content: View>: View {
+public struct SVG<Content: View & Sendable>: View {
 
 	public enum ConverterError: Swift.Error, Sendable {
 		case cannotDecodeSVG
