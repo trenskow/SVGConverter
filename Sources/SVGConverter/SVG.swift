@@ -297,7 +297,7 @@ public struct SVG<Content: View & Sendable>: View {
 
 	public init(
 		html: String? = nil, // Is build in – provide only for updated version.
-		content: @MainActor @Sendable @escaping (@escaping SVGConvert) -> Content
+		@ViewBuilder content: @MainActor @Sendable @escaping (@escaping SVGConvert) -> Content
 	) {
 		self.html = html
 		self.content = content
