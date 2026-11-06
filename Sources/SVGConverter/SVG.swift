@@ -8,6 +8,8 @@
 import SwiftUI
 import WebKit
 
+public typealias SVGConvert = (@Sendable (Data) async throws -> UIImage)
+
 @MainActor
 public struct SVG<Content: View & Sendable>: View {
 
@@ -16,8 +18,6 @@ public struct SVG<Content: View & Sendable>: View {
 		case cannotDecodeResult
 		case jsError(message: String)
 	}
-
-	public typealias Convert = (@Sendable (Data) async throws -> UIImage)
 
 	@MainActor
 	private struct SVGBackgroundView: UIViewRepresentable {
@@ -192,12 +192,12 @@ public struct SVG<Content: View & Sendable>: View {
 
 		}
 
-		@Binding private var convert: Convert?
+		@Binding private var convert: SVGConvert?
 		private let html: String?
 		private let displayScale: CGFloat
 
 		init(
-			convert: Binding<Convert?>,
+			convert: Binding<SVGConvert?>,
 			html: String?,
 			displayScale: CGFloat
 		) {
@@ -250,7 +250,15 @@ public struct SVG<Content: View & Sendable>: View {
 
 							context.coordinator.queue[parameters.uuid] = continuation
 
-							try await context.coordinator.webView.evaluateJavaScript("convert(\(arguments))")
+							do {
+								try await context.coordinator.webView.evaluateJavaScript("convert(\(arguments))")
+							} catch {
+
+								context.coordinator.queue.removeValue(
+									forKey: parameters.uuid
+								)?.resume(throwing: error)
+
+							}
 
 						}
 					}
@@ -282,14 +290,14 @@ public struct SVG<Content: View & Sendable>: View {
 
 	@Environment(\.displayScale) private var displayScale
 
-	@State private var convert: Convert?
+	@State private var convert: SVGConvert?
 
 	private let html: String?
-	private let content: @MainActor @Sendable (@escaping Convert) -> Content
+	private let content: @MainActor @Sendable (@escaping SVGConvert) -> Content
 
 	public init(
 		html: String? = nil, // Is build in – provide only for updated version.
-		content: @MainActor @Sendable @escaping (@escaping Convert) -> Content
+		content: @MainActor @Sendable @escaping (@escaping SVGConvert) -> Content
 	) {
 		self.html = html
 		self.content = content
