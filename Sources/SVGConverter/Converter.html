@@ -63,8 +63,18 @@
 				});
 
 				const send = (what) => {
-					window.webkit?.messageHandlers.converter.postMessage(
-						JSON.stringify(what));
+
+					const payload = JSON.stringify(
+						what)
+
+					if (window.SVGConverter) {
+						window.SVGConverter.postMessage(
+							payload)
+					} else {
+						window.webkit?.messageHandlers.converter.postMessage(
+							payload);
+					}
+
 				};
 
 				const failed = (error) => {
@@ -100,7 +110,7 @@
 							image.onerror = reject;
 
 							image.src = url
-							
+
 						});
 
 						canvas.width = image.naturalWidth;
@@ -146,7 +156,7 @@
 				})().catch(failed);
 
 			};
-			
+
 		</script>
 	</head>
 	<body>
