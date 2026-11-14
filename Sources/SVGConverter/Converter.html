@@ -3,6 +3,54 @@
 	<head>
 		<script>
 
+			function scaled({
+				svg,
+				scale
+			}) {
+
+				const doc = (new DOMParser()).parseFromString(
+					svg,
+					'image/svg+xml');
+
+				const root = doc.documentElement;
+
+				if (root.nodeName !== 'svg') {
+					throw new Error('Root element is not an SVG.');
+				}
+
+				const length = (value) => {
+					const match = /^\s*([\d.eE+-]+)\s*(px)?\s*$/.exec(value || '');
+					return match ? parseFloat(match[1]) : undefined;
+				}
+
+				const viewBox = root.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+				const hasViewBox = viewBox?.length === 4 && viewBox.every(Number.isFinite);
+
+				let width = length(root.getAttribute('width'));
+				let height = length(root.getAttribute('height'));
+
+				if (hasViewBox) {
+					const ratio = viewBox[3] / viewBox[2];
+					width ??= height !== undefined ? height / ratio : viewBox[2];
+					height ??= width * ratio
+				}
+
+				if (width === undefined || height === undefined) {
+					throw new Error('Unable to determine SVG dimensions.');
+				}
+
+				if (!hasViewBox) {
+					root.setAttribute('viewBox', `0 0 ${width} ${height}`);
+				}
+
+				root.setAttribute('width', width * scale);
+				root.setAttribute('height', height * scale);
+
+				return (new XMLSerializer())
+					.serializeToString(root);
+
+			}
+
 			function convert({
 				uuid,
 				svg,
@@ -14,110 +62,6 @@
 					document.addEventListener('DOMContentLoaded', resolve);
 				});
 
-				const scaleElement = (element) => {
-
-					const transformAttribute = (value) => {
-
-						let result = '';
-						let unprocessed = '';
-
-						for (let idx = 0 ; idx < value.length + 1 ; idx++) {
-
-							const character = value[idx] || ' ';
-
-							if (['-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', 'e', '%'].includes(value[idx])) {
-								unprocessed += value[idx];
-							} else {
-
-								if (unprocessed.slice(0, -1) !== '%') {
-
-									let number = parseFloat(unprocessed);
-
-									if (!isNaN(number)) {
-										unprocessed = `${number * scale}`;
-									}
-
-								}
-
-								result += unprocessed + character;
-								unprocessed = '';
-
-							}
-
-						}
-
-						return result.slice(0, -1);
-
-					};
-
-					for (const attribute of element.attributes) {
-
-						if (['x', 'y', 'width', 'height', 'viewBox', 'd', 'dx', 'dy', 'cx', 'cy', 'r', 'rx', 'ry'].includes(attribute.name)) {
-							attribute.value = transformAttribute(
-								attribute.value);
-						}
-
-						if (attribute.name === 'transform') {
-
-							let parsed = [];
-							let unparsed = attribute.value;
-
-							let match;
-							
-							while ((match = unparsed.match(/(?<fnc>rotate|translate|skewX|skewY|scale)\((?<values>[-[0-9\.\s]+)\)?/m))) {
-
-								const {
-									fnc 
-								} = match.groups;
-
-								let {
-									values
-								} = match.groups;
-
-								switch (fnc) {
-									case 'rotate': {
-										values = values
-											.split(/\s/);
-										values = [
-											values[0], 
-											...values
-												.slice(1)
-												.map((value) => transformAttribute(value))]
-											.join(' ');
-										break;
-									}
-									case 'translate': {
-										values = values
-											.split(/\s/)
-											.map((value) => transformAttribute(value))
-											.join(' ');
-										break;
-									}
-								}
-
-								parsed
-									.push(`${fnc}(${values})`);
-
-								unparsed = unparsed
-									.slice(match[0].length)
-									.trim();
-
-							}
-
-							attribute.value = parsed.join(' ');
-
-						}
-
-					}
-
-					for (const child of element.children || []) {
-						scaleElement(child, scale);
-					}
-
-					return element;
-
-				};
-
 				const send = (what) => {
 					window.webkit?.messageHandlers.converter.postMessage(
 						JSON.stringify(what));
@@ -127,7 +71,7 @@
 					send({
 						uuid,
 						result: 'failure',
-						message: error.message
+						message: error.message || "Unknown error."
 					});
 				};
 
@@ -140,9 +84,10 @@
 
 					try {
 
-						svg = scaleElement((new DOMParser())
-							.parseFromString(svg, 'image/svg+xml')
-							.documentElement).outerHTML;
+						svg = scaled({
+							svg,
+							scale
+						});
 
 						const image = new Image();
 
@@ -196,9 +141,6 @@
 
 					} catch (error) {
 						failed(error);
-					} finally {
-						document.body.removeChild(
-							canvas);
 					}
 
 				})().catch(failed);
